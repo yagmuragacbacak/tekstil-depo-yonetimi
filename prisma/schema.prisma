@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  kullanici_adi String   @unique
+  sifre_hash    String
+  rol           String   // 'yonetici' veya 'calisan'
+}
+
+model Product {
+  id             Int      @id @default(autoincrement())
+  model_kodu     String   @unique
+  isim           String
+  kumas_turu     String?
+  eklenme_tarihi DateTime @default(now())
+  
+  stocks         Stock[]  // Bir ürünün birden fazla stoğu/varyantı olabilir
+}
+
+model Stock {
+  id        Int      @id @default(autoincrement())
+  urun_id   Int
+  beden     String
+  parti_no  Int?
+  adet      Int      @default(0)
+  lokasyon  String?
+  
+  product   Product  @relation(fields: [urun_id], references: [id], onDelete: Cascade)
+}

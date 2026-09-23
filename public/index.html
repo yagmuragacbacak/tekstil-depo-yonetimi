@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Depo Yönetim Sistemi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 h-screen font-sans">
+    <div id="app" class="h-full">
+        <!-- =================== LOGIN EKRANI =================== -->
+        <div v-if="!user" class="flex items-center justify-center h-full bg-slate-800">
+            <div class="bg-white p-8 rounded-lg shadow-xl w-96">
+                <div class="text-center mb-6">
+                    <i class="fas fa-boxes text-4xl text-blue-600 mb-2"></i>
+                    <h2 class="text-2xl font-bold text-gray-800">Depo Sistemi</h2>
+                </div>
+                
+                <div class="flex mb-6 bg-gray-200 rounded-lg p-1">
+                    <button @click="loginForm.rol = 'yonetici'" :class="{'bg-white shadow text-blue-600': loginForm.rol === 'yonetici', 'text-gray-600': loginForm.rol !== 'yonetici'}" class="flex-1 py-2 rounded-md font-medium transition">Yönetici</button>
+                    <button @click="loginForm.rol = 'calisan'" :class="{'bg-white shadow text-blue-600': loginForm.rol === 'calisan', 'text-gray-600': loginForm.rol !== 'calisan'}" class="flex-1 py-2 rounded-md font-medium transition">Çalışan</button>
+                </div>
+
+                <form @submit.prevent="login">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Kullanıcı Adı</label>
+                        <input v-model="loginForm.kullanici_adi" type="text" required class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Şifre</label>
+                        <input v-model="loginForm.sifre_hash" type="password" required class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-medium">Giriş Yap</button>
+                </form>
+                <p class="text-xs text-gray-500 text-center mt-4">* İlk girişte kullanıcı bulunamazsa otomatik olarak kaydedilir.</p>
+            </div>
+        </div>
+
+        <!-- =================== ANA UYGULAMA =================== -->
+        <div v-else class="flex h-full">
+            <!-- SIDEBAR -->
+            <div class="w-64 bg-slate-800 text-white flex flex-col">
+                <div class="p-4 flex items-center gap-3 border-b border-slate-700">
+                    <i class="fas fa-boxes text-2xl text-blue-400"></i>
+                    <span class="text-xl font-bold">DepoApp</span>
+                </div>
+                <div class="p-4 bg-slate-900">
+                    <p class="text-xs text-slate-400 mb-1">Giriş Yapan Kullanıcı</p>
+                    <p class="font-bold truncate">{{ user.kullanici_adi }}</p>
+                    <span class="inline-block mt-1 text-xs px-2 py-1 rounded bg-blue-600 font-medium">{{ user.rol === 'yonetici' ? 'Yönetici' : 'Çalışan' }}</span>
+                </div>
+                <nav class="flex-1 px-2 py-4 space-y-1">
+                    <a @click="currentView = 'urunler'; searchResult = null" :class="{'bg-slate-700 border-l-4 border-blue-500': currentView === 'urunler'}" class="block px-3 py-2 rounded-md cursor-pointer hover:bg-slate-700 transition"><i class="fas fa-box w-6 text-center"></i> Ürünler</a>
+                    
+                    <a @click="currentView = 'stoklar'; searchResult = null" :class="{'bg-slate-700 border-l-4 border-blue-500': currentView === 'stoklar'}" class="block px-3 py-2 rounded-md cursor-pointer hover:bg-slate-700 transition"><i class="fas fa-layer-group w-6 text-center"></i> Stoklar</a>
+                    
+                    <a @click="currentView = 'kritik'; searchResult = null" :class="{'bg-slate-700 border-l-4 border-red-500 text-red-400': currentView === 'kritik', 'text-red-300': currentView !== 'kritik'}" class="block px-3 py-2 rounded-md cursor-pointer hover:bg-slate-700 transition"><i class="fas fa-exclamation-triangle w-6 text-center"></i> Kritik Stoklar</a>
+                </nav>
+                <div class="p-4 border-t border-slate-700">
+                    <button @click="logout" class="w-full px-3 py-2 text-left text-slate-300 hover:text-white hover:bg-red-600 rounded-md transition"><i class="fas fa-sign-out-alt mr-2"></i> Çıkış Yap</button>
+                </div>
+            </div>
+
+            <!-- MAIN CONTENT -->
+            <div class="flex-1 flex flex-col overflow-hidden">
+                <!-- TOP HEADER & SEARCH CORNER -->
+                <header class="bg-white shadow-sm z-10 p-4 flex justify-between items-center">
+                    <h1 class="text-2xl font-bold text-gray-800 capitalize">
+                        {{ currentView === 'urunler' ? 'Tüm Ürünler' : (currentView === 'stoklar' ? 'Tüm Stoklar' : 'Kritik Stoklar (<= 10)') }}
+                    </h1>
+                    <!-- ARAMA KÖŞESİ -->
+                    <div class="relative flex items-center">
+                        <input v-model="searchQuery" @keyup.enter="searchProduct" type="text" placeholder="Ürün Kodu Ara..." class="pl-10 pr-4 py-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 w-64 bg-gray-50">
+                        <i class="fas fa-search absolute left-4 text-gray-400"></i>
+                        <button @click="searchProduct" class="ml-2 bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 transition text-sm font-medium">Ara</button>
+                    </div>
+                </header>
+
+                <!-- KONTENT ALANI -->
+                <main class="flex-1 overflow-auto p-6 bg-gray-50 relative">
+                    <div v-if="loading" class="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-20">
+                        <i class="fas fa-spinner fa-spin text-4xl text-blue-600"></i>
+                    </div>
+
+                    <!-- Arama Sonucu Görünümü -->
+                    <div v-if="searchResult" class="mb-6 bg-white p-6 rounded-xl shadow border-l-4 border-blue-500 relative">
+                        <button @click="searchResult = null" class="absolute top-4 right-4 text-gray-400 hover:text-red-500 text-xl"><i class="fas fa-times"></i></button>
+                        <h3 class="text-xl font-bold text-gray-800 mb-1">Arama Sonucu</h3>
+                        <p class="text-gray-600 mb-4">{{ searchResult.model_kodu }} - {{ searchResult.isim }} ({{ searchResult.kumas_turu || 'Belirtilmemiş' }})</p>
+                        
+                        <h4 class="font-bold text-gray-700 mb-2">Stok Durumu:</h4>
+                        <div class="overflow-x-auto rounded-lg border">
+                            <table class="w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                                    <tr>
+                                        <th class="px-4 py-2">Beden</th>
+                                        <th class="px-4 py-2">Adet</th>
+                                        <th class="px-4 py-2">Lokasyon</th>
+                                        <th class="px-4 py-2">Parti No</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="stok in searchResult.stocks" :key="stok.id" class="border-b">
+                                        <td class="px-4 py-2 font-medium">{{ stok.beden }}</td>
+                                        <td class="px-4 py-2 font-bold" :class="{'text-red-500': stok.adet <= 10, 'text-green-600': stok.adet > 10}">{{ stok.adet }}</td>
+                                        <td class="px-4 py-2">{{ stok.lokasyon || '-' }}</td>
+                                        <td class="px-4 py-2">{{ stok.parti_no || '-' }}</td>
+                                    </tr>
+                                    <tr v-if="!searchResult.stocks || searchResult.stocks.length === 0">
+                                        <td colspan="4" class="px-4 py-4 text-center text-gray-400">Bu ürüne ait stok kaydı bulunamadı.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Normal Görünüm -->
+                    <div v-if="!searchResult">
+                        <!-- Ürünler -->
+                        <div v-if="currentView === 'urunler'">
+                            <div class="flex justify-end mb-4" v-if="user.rol === 'yonetici'">
+                                <button @click="showAddProduct = true" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-medium shadow-sm"><i class="fas fa-plus mr-1"></i> Yeni Ürün Ekle</button>
+                            </div>
+                            <div class="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
+                                <table class="w-full text-left text-sm">
+                                    <thead class="bg-gray-100 text-gray-600 border-b">
+                                        <tr>
+                                            <th class="p-4 font-bold">ID</th>
+                                            <th class="p-4 font-bold">Model Kodu</th>
+                                            <th class="p-4 font-bold">İsim</th>
+                                            <th class="p-4 font-bold">Kumaş Türü</th>
+                                            <th class="p-4 font-bold text-center" v-if="user.rol === 'yonetici'">İşlem</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="urun in urunler" :key="urun.id" class="border-b hover:bg-blue-50 transition">
+                                            <td class="p-4 text-gray-500">#{{ urun.id }}</td>
+                                            <td class="p-4 font-semibold text-gray-800">{{ urun.model_kodu }}</td>
+                                            <td class="p-4">{{ urun.isim }}</td>
+                                            <td class="p-4">{{ urun.kumas_turu || '-' }}</td>
+                                            <td class="p-4 text-center" v-if="user.rol === 'yonetici'">
+                                                <button @click="deleteProduct(urun.id)" title="Sil" class="text-red-500 hover:text-red-700 p-2 bg-red-50 rounded-full hover:bg-red-100 transition"><i class="fas fa-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="urunler.length === 0">
+                                            <td colspan="5" class="p-8 text-center text-gray-400">Hiç ürün bulunamadı.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Stoklar / Kritik Stoklar -->
+                        <div v-if="currentView === 'stoklar' || currentView === 'kritik'">
+                            <div class="flex justify-end mb-4" v-if="user.rol === 'yonetici'">
+                                <button @click="showAddStock = true" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-medium shadow-sm"><i class="fas fa-plus mr-1"></i> Stok Girişi / Güncelle</button>
+                            </div>
+                            <div class="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
+                                <table class="w-full text-left text-sm">
+                                    <thead class="bg-gray-100 text-gray-600 border-b">
+                                        <tr>
+                                            <th class="p-4 font-bold">Ürün Kodu</th>
+                                            <th class="p-4 font-bold">Ürün İsmi</th>
+                                            <th class="p-4 font-bold text-center">Beden</th>
+                                            <th class="p-4 font-bold text-center">Adet</th>
+                                            <th class="p-4 font-bold">Lokasyon</th>
+                                            <th class="p-4 font-bold text-center" v-if="user.rol === 'yonetici'">İşlem</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="stok in (currentView === 'kritik' ? kritikStoklar : stoklar)" :key="stok.id" class="border-b hover:bg-blue-50 transition">
+                                            <td class="p-4 font-semibold text-gray-800">{{ stok.product?.model_kodu }}</td>
+                                            <td class="p-4">{{ stok.product?.isim }}</td>
+                                            <td class="p-4 text-center font-medium">{{ stok.beden }}</td>
+                                            <td class="p-4 text-center font-bold text-lg" :class="{'text-red-600': stok.adet <= 10, 'text-green-600': stok.adet > 10}">
+                                                {{ stok.adet }}
+                                                <i v-if="stok.adet <= 10" class="fas fa-arrow-down text-xs ml-1 text-red-500"></i>
+                                            </td>
+                                            <td class="p-4">{{ stok.lokasyon || '-' }}</td>
+                                            <td class="p-4 text-center" v-if="user.rol === 'yonetici'">
+                                                <button @click="deleteStock(stok.id)" title="Sil" class="text-red-500 hover:text-red-700 p-2 bg-red-50 rounded-full hover:bg-red-100 transition"><i class="fas fa-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="(currentView === 'stoklar' && stoklar.length === 0) || (currentView === 'kritik' && kritikStoklar.length === 0)">
+                                            <td colspan="6" class="p-8 text-center text-gray-400">Gösterilecek stok kaydı yok.</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+
+        <!-- Ürün Ekleme Modalı -->
+        <div v-if="showAddProduct" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-6 rounded-xl shadow-2xl w-96">
+                <h3 class="text-xl font-bold mb-4 border-b pb-2">Yeni Ürün Ekle</h3>
+                <form @submit.prevent="addProduct">
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Model Kodu *</label>
+                        <input v-model="newProduct.model_kodu" type="text" required class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-green-500 outline-none">
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Ürün İsmi *</label>
+                        <input v-model="newProduct.isim" type="text" required class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-green-500 outline-none">
+                    </div>
+                    <div class="mb-5">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Kumaş Türü</label>
+                        <input v-model="newProduct.kumas_turu" type="text" class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-green-500 outline-none">
+                    </div>
+                    <div class="flex justify-end gap-3">
+                        <button type="button" @click="showAddProduct = false" class="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded font-medium">İptal</button>
+                        <button type="submit" class="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded font-medium">Kaydet</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Stok Ekleme Modalı -->
+        <div v-if="showAddStock" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-6 rounded-xl shadow-2xl w-96">
+                <h3 class="text-xl font-bold mb-4 border-b pb-2">Stok Girişi</h3>
+                <form @submit.prevent="addStock">
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Ürün Seçiniz *</label>
+                        <select v-model="newStock.urun_id" required class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="">Seçiniz...</option>
+                            <option v-for="urun in urunler" :value="urun.id">{{ urun.model_kodu }} - {{ urun.isim }}</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-3 mb-3">
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Beden *</label>
+                            <input v-model="newStock.beden" type="text" placeholder="Örn: M, L" required class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Adet *</label>
+                            <input v-model.number="newStock.adet" type="number" required class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                        </div>
+                    </div>
+                    <div class="mb-5">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Lokasyon (Opsiyonel)</label>
+                        <input v-model="newStock.lokasyon" type="text" placeholder="Örn: Raf A3" class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div class="flex justify-end gap-3">
+                        <button type="button" @click="showAddStock = false" class="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded font-medium">İptal</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded font-medium">Kaydet</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, watch } = Vue;
+
+        createApp({
+            setup() {
+                const user = ref(null);
+                const loginForm = ref({ kullanici_adi: '', sifre_hash: '', rol: 'yonetici' });
+                const currentView = ref('urunler');
+                
+                const urunler = ref([]);
+                const stoklar = ref([]);
+                const kritikStoklar = ref([]);
+                
+                const searchQuery = ref('');
+                const searchResult = ref(null);
+
+                const showAddProduct = ref(false);
+                const newProduct = ref({ model_kodu: '', isim: '', kumas_turu: '' });
+
+                const showAddStock = ref(false);
+                const newStock = ref({ urun_id: '', beden: '', adet: 0, lokasyon: '' });
+
+                const loading = ref(false);
+
+                onMounted(() => {
+                    const savedUser = localStorage.getItem('depoUser');
+                    if(savedUser) {
+                        user.value = JSON.parse(savedUser);
+                        fetchData();
+                    }
+                });
+
+                watch(currentView, () => {
+                    if (user.value) fetchData();
+                });
+
+                const login = async () => {
+                    try {
+                        const res = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(loginForm.value)
+                        });
+                        const data = await res.json();
+                        if(res.ok) {
+                            user.value = data.user;
+                            localStorage.setItem('depoUser', JSON.stringify(data.user));
+                            fetchData();
+                        } else {
+                            alert(data.hata || 'Giriş başarısız!');
+                        }
+                    } catch(err) {
+                        alert('Sunucuya bağlanılamadı!');
+                    }
+                };
+
+                const logout = () => {
+                    user.value = null;
+                    localStorage.removeItem('depoUser');
+                };
+
+                const fetchData = async () => {
+                    loading.value = true;
+                    try {
+                        if(currentView.value === 'urunler') {
+                            const res = await fetch('/api/urunler');
+                            urunler.value = await res.json();
+                        } else if (currentView.value === 'stoklar') {
+                            const res = await fetch('/api/stok');
+                            stoklar.value = await res.json();
+                        } else if (currentView.value === 'kritik') {
+                            const res = await fetch('/api/stok/kritik');
+                            const data = await res.json();
+                            kritikStoklar.value = data.kritikStoklar || [];
+                        }
+                        
+                        // Dropdown için ürünleri her zaman çek (Stok eklerken lazım)
+                        if(urunler.value.length === 0) {
+                            const res = await fetch('/api/urunler');
+                            urunler.value = await res.json();
+                        }
+                    } catch(err) {
+                        console.error('Veri çekme hatası', err);
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const searchProduct = async () => {
+                    if(!searchQuery.value) return;
+                    loading.value = true;
+                    try {
+                        const res = await fetch(`/api/urunler/ara/${searchQuery.value}`);
+                        if(res.ok) {
+                            searchResult.value = await res.json();
+                        } else {
+                            alert('Ürün bulunamadı!');
+                            searchResult.value = null;
+                        }
+                    } catch(err) {
+                        alert('Arama sırasında hata oluştu!');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const addProduct = async () => {
+                    try {
+                        const res = await fetch('/api/urunler', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(newProduct.value)
+                        });
+                        if(res.ok) {
+                            showAddProduct.value = false;
+                            newProduct.value = { model_kodu: '', isim: '', kumas_turu: '' };
+                            fetchData();
+                        } else {
+                            const err = await res.json();
+                            alert(err.hata || 'Ürün eklenirken hata oluştu.');
+                        }
+                    } catch (e) {
+                        alert('Bağlantı hatası.');
+                    }
+                };
+
+                const addStock = async () => {
+                    try {
+                        const res = await fetch('/api/stok', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(newStock.value)
+                        });
+                        if(res.ok) {
+                            showAddStock.value = false;
+                            newStock.value = { urun_id: '', beden: '', adet: 0, lokasyon: '' };
+                            fetchData();
+                        } else {
+                            alert('Stok güncellenirken hata oluştu.');
+                        }
+                    } catch (e) {
+                        alert('Bağlantı hatası.');
+                    }
+                };
+
+                const deleteProduct = async (id) => {
+                    if(!confirm('Bu ürünü ve tüm stoklarını silmek istediğinize emin misiniz?')) return;
+                    await fetch(`/api/urunler/${id}`, { method: 'DELETE' });
+                    fetchData();
+                };
+
+                const deleteStock = async (id) => {
+                    if(!confirm('Bu stok kaydını silmek istediğinize emin misiniz?')) return;
+                    await fetch(`/api/stok/${id}`, { method: 'DELETE' });
+                    fetchData();
+                };
+
+                return {
+                    user, loginForm, login, logout, currentView,
+                    urunler, stoklar, kritikStoklar,
+                    searchQuery, searchProduct, searchResult, loading,
+                    showAddProduct, newProduct, addProduct, deleteProduct,
+                    showAddStock, newStock, addStock, deleteStock
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
