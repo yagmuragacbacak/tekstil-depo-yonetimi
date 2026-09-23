@@ -28,7 +28,7 @@ Tekstil işletmelerinde ürün modellerini, beden/adet bazlı stok hareketlerini
 
 ### 1. Projeyi Klonlayın
 \`\`\`bash
-git clone https://github.com/KULLANICI_ADIN/depoapp-backend.git
+git clone (https://github.com/yagmuragacbacak/tekstil-depo-yonetimi.git)
 cd depoapp-backend
 \`\`\`
 
